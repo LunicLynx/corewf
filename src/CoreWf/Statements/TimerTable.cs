@@ -147,6 +147,7 @@ namespace System.Activities.Statements
             foreach (TimerData timerData in _sortedTimerList.Timers)
             {
                 //timerData.IOThreadTimer = new IOThreadTimer(this.timerExtension.OnTimerFiredCallback, timerData.Bookmark, false, 0);
+                timerData.DelayTimer = new DelayTimer(_timerExtension.OnTimerFiredCallback, timerData.Bookmark);
                 if (timerData.ExpirationTime <= DateTime.UtcNow)
                 {
                     // If the timer expired, we want to fire it immediately to win the race against UnloadOnIdle policy
@@ -155,7 +156,7 @@ namespace System.Activities.Statements
                 else
                 {
                     //timerData.IOThreadTimer.Set(timerData.ExpirationTime - DateTime.UtcNow);
-                    timerData.DelayTimer = new DelayTimer(_timerExtension.OnTimerFiredCallback, timerData.Bookmark, timerData.ExpirationTime - DateTime.UtcNow);
+                    timerData.DelayTimer.Set(timerData.ExpirationTime - DateTime.UtcNow);
                 }
             }
         }
