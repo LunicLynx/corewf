@@ -1,0 +1,3 @@
+[submodule "libs/Portable.Xaml"]
+	path = libs/Portable.Xaml
+	url = https://github.com/LunicLynx/Portable.Xaml.git
