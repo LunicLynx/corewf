@@ -331,8 +331,8 @@ namespace TestCases.Activities.Flowchart
         {
             TestFlowchart flowchart = new TestFlowchart();
 
-            ((System.Activities.Statements.Flowchart)flowchart.ProductActivity).Nodes.Add(new System.Activities.Statements.FlowStep { Action = new Delay() });
-            ((System.Activities.Statements.Flowchart)flowchart.ProductActivity).Nodes.Add(new System.Activities.Statements.FlowStep { Action = new Delay() });
+            ((System.Activities.Statements.Flowchart)flowchart.ProductActivity).Nodes.Add(new System.Activities.Statements.FlowStep { Action = new System.Activities.Statements.Delay() });
+            ((System.Activities.Statements.Flowchart)flowchart.ProductActivity).Nodes.Add(new System.Activities.Statements.FlowStep { Action = new System.Activities.Statements.Delay() });
 
             ((System.Activities.Statements.Flowchart)flowchart.ProductActivity).Nodes.Clear();
 
@@ -359,7 +359,7 @@ namespace TestCases.Activities.Flowchart
         public void RemoveElementFromCollectionAtDesignTime()
         {
             TestFlowchart flowchart = new TestFlowchart();
-            FlowStep step = new FlowStep() { Action = new Delay() };
+            FlowStep step = new FlowStep() { Action = new System.Activities.Statements.Delay() };
 
             flowchart.Elements.Add(new TestFlowStep() { ActionActivity = new TestWriteLine("Start", "Start") });
             ((System.Activities.Statements.Flowchart)flowchart.ProductActivity).Nodes.Add(step);

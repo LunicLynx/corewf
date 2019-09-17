@@ -594,10 +594,10 @@ namespace Test.Common.TestObjects.Runtime
 
         internal void InitiateWorkflowForLoad(List<object> extensionCollection = null)
         {
-            if (_workflowInstanceId == Guid.Empty)
-            {
-                throw new InvalidOperationException("LoadWorkflow failed as InstanceId is not valid");
-            }
+            //if (_workflowInstanceId == Guid.Empty)
+            //{
+            //    throw new InvalidOperationException("LoadWorkflow failed as InstanceId is not valid");
+            //}
 
             WorkflowIdentity definitionIdentity = null;
             //WorkflowIdentity.TryParse(this.testWorkflowRuntimeConfiguration.DefinitionIdentity, out definitionIdentity);

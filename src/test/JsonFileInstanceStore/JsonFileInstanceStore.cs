@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Xml.Linq;
 
 namespace JsonFileInstanceStore
@@ -69,6 +70,10 @@ namespace JsonFileInstanceStore
                 {
                     return new TypedCompletedAsyncResult<bool>(DeleteWorkflowOwner(context, (DeleteWorkflowOwnerCommand)command), callback, state);
                 }
+                else if (command is TryLoadRunnableWorkflowCommand)
+                {
+                    return new TypedCompletedAsyncResult<bool>(TryLoadRunnableWorkflow(context, (TryLoadRunnableWorkflowCommand)command), callback, state);
+                }
                 return new TypedCompletedAsyncResult<bool>(false, callback, state);
             }
             catch (Exception e)
@@ -84,6 +89,16 @@ namespace JsonFileInstanceStore
                 throw exceptionResult.Data;
             }
             return TypedCompletedAsyncResult<bool>.End(result);
+        }
+
+        public static readonly XNamespace WorkflowNamespace = XNamespace.Get("urn:schemas-microsoft-com:System.Activities/4.0/properties");
+        public static readonly XName PendingTimerExpirationPropertyName = WorkflowNamespace.GetName("TimerExpirationTime");
+
+        private static DateTime? GetPendingTimerExpiration(SaveWorkflowCommand saveWorkflowCommand)
+        {
+            if (saveWorkflowCommand.InstanceData.TryGetValue(PendingTimerExpirationPropertyName, out var instanceValue))
+                return ((DateTime)instanceValue.Value).ToUniversalTime();
+            return default;
         }
 
         private bool SaveWorkflow(InstancePersistenceContext context, SaveWorkflowCommand command)
@@ -103,6 +118,14 @@ namespace JsonFileInstanceStore
             }
             else
             {
+                var timerTable = new Dictionary<Guid, DateTime>();
+
+                var pendingTimerExpiration = GetPendingTimerExpiration(command);
+                if (pendingTimerExpiration.HasValue)
+                {
+                    timerTable.Add(context.InstanceView.InstanceId, pendingTimerExpiration.Value);
+                }
+
                 Dictionary<string, InstanceValue> instanceData = SerializeablePropertyBagConvertXNameInstanceValue(command.InstanceData);
                 Dictionary<string, InstanceValue> instanceMetadata = SerializeInstanceMetadataConvertXNameInstanceValue(context, command);
 
@@ -113,6 +136,9 @@ namespace JsonFileInstanceStore
 
                     var serializedInstanceMetadata = JsonConvert.SerializeObject(instanceMetadata, Formatting.Indented, _jsonSerializerSettings);
                     File.WriteAllText(_storeDirectoryPath + "\\" + context.InstanceView.InstanceId + "-InstanceMetadata", serializedInstanceMetadata);
+
+                    var serializedTimerTable = JsonConvert.SerializeObject(timerTable, Formatting.Indented, _jsonSerializerSettings);
+                    File.WriteAllText(_storeDirectoryPath + "\\" + "TimerTable", serializedTimerTable);
                 }
                 catch (Exception)
                 {
@@ -139,6 +165,32 @@ namespace JsonFileInstanceStore
             return true;
         }
 
+        private bool TryLoadRunnableWorkflow(InstancePersistenceContext context, TryLoadRunnableWorkflowCommand command)
+        {
+            var serializedInstanceData = File.ReadAllText(_storeDirectoryPath + "\\" + "TimerTable");
+            var timerTable = JsonConvert.DeserializeObject<Dictionary<Guid, DateTime>>(serializedInstanceData, _jsonSerializerSettings);
+
+            var expiredTimerInstances = timerTable
+                .Where(kv =>
+                {
+                    var now = DateTime.UtcNow;
+                    return kv.Value < now;
+                })
+                .Cast<KeyValuePair<Guid, DateTime>?>()
+                .DefaultIfEmpty(null)
+                .FirstOrDefault();
+
+            if (!expiredTimerInstances.HasValue)
+                return true;
+
+            var instanceId = expiredTimerInstances.Value.Key;
+
+            if (!context.InstanceView.IsBoundToInstance)
+                context.BindInstance(instanceId);
+
+            return LoadWorkflowInternal(context, command, instanceId);
+        }
+
         private bool LoadWorkflow(InstancePersistenceContext context, LoadWorkflowCommand command)
         {
             if (command.AcceptUninitializedInstance)
@@ -146,6 +198,12 @@ namespace JsonFileInstanceStore
                 return false;
             }
 
+            var instanceId = context.InstanceView.InstanceId;
+            return LoadWorkflowInternal(context, command, instanceId);
+        }
+
+        private bool LoadWorkflowInternal(InstancePersistenceContext context, InstancePersistenceCommand command, Guid instanceId)
+        {
             if (context.InstanceVersion == -1)
             {
                 context.BindAcquiredLock(0);
@@ -159,10 +217,10 @@ namespace JsonFileInstanceStore
 
             try
             {
-                var serializedInstanceData = File.ReadAllText(_storeDirectoryPath + "\\" + context.InstanceView.InstanceId + "-InstanceData");
+                var serializedInstanceData = File.ReadAllText(_storeDirectoryPath + "\\" + instanceId + "-InstanceData");
                 serializableInstanceData = JsonConvert.DeserializeObject<Dictionary<string, InstanceValue>>(serializedInstanceData, _jsonSerializerSettings);
 
-                var serializedInstanceMetadata = File.ReadAllText(_storeDirectoryPath + "\\" + context.InstanceView.InstanceId + "-InstanceMetadata");
+                var serializedInstanceMetadata = File.ReadAllText(_storeDirectoryPath + "\\" + instanceId + "-InstanceMetadata");
                 serializableInstanceMetadata = JsonConvert.DeserializeObject<Dictionary<string, InstanceValue>>(serializedInstanceMetadata, _jsonSerializerSettings);
             }
             catch (Exception)
